@@ -78,8 +78,8 @@ print(list(model.parameters())[5].size())
 
 #Nummber of steps to unroll
 seq_dim = 28
-
 iter = 0
+
 for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_loader):
         images = variable(images.view(-1, seq_dim, input_dim))
