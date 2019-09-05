@@ -1,0 +1,108 @@
+import torch, numpy as np, torch.nn as nn
+from torch.autograd import variable
+import torchvision.transforms as transforms, torchvision.datasets as dsets
+
+train_dataset = dsets.MNIST(root = "./data", 
+                            train = True,
+                            transform = transforms.ToTensor(),
+                            download = True)
+
+test_dataset = dsets.MNIST(root = "./data", 
+                            train = False,
+                            transform = transforms.ToTensor())
+
+batch_size = 100
+n_iters = 3000
+num_epochs = n_iters / (len(train_dataset) / batch_size)
+num_epochs = int(num_epochs)
+
+train_loader = torch.utils.data.DataLoader(dataset = train_dataset,
+                                       batch_size = batch_size,
+                                       shuffle = True)
+
+test_loader = torch.utils.data.DataLoader(dataset = test_dataset,
+                                          batch_size = batch_size,
+                                          shuffle = False)
+
+class RNNModel(nn.Module):
+    def __init__(self, input_dim, hidden_dim, layer_dim, output_dim):
+        super(RNNModel, self).__init__()
+        
+        #Hidden Dimensions
+        self.hidden_dim = hidden_dim
+        
+        #Number Of Hidden Layers
+        self.layer_dim = layer_dim
+        
+        #Building Your RNN
+        #batch_first = True causes input/output tensors to be of shape
+        #(batch_dim, seq_dim, input_dim)
+        self.rnn = nn.RNN(input_dim, hidden_dim, layer_dim, batch_first = True, nonlinearity ="relu")
+        
+        self.fc = nn.Linear(hidden_dim, output_dim)
+        
+    def forward(self, x):
+        
+        #Initialize Hidden States With Zeros
+        #layer_dim, batch_size, hidden_dim
+        h0 = variable(torch.zeros(self.layer_dim, x.size(0), self.hidden_dim))
+        
+        #One Time Step
+        out, hn = self.rnn(x, h0)
+        
+        #Index hidden state of last time step
+        #Out.size() --> 100, 28, 100
+        #Out[:, -1, :] -->100, 100 --> just want last time step hidden states
+        out = self.fc(out[:, -1, :])
+        
+        #Out size --> 100, 10
+        return out
+    
+input_dim = 28
+hidden_dim = 100
+layer_dim = 2
+output_dim = 10
+
+model = RNNModel(input_dim, hidden_dim, layer_dim, output_dim)
+criterion = nn.CrossEntropyLoss()
+learning_rate = 0.1
+optimizer = torch.optim.SGD(model.parameters(), lr = learning_rate)
+
+print(len(list(model.parameters())))
+print(list(model.parameters())[0].size())
+print(list(model.parameters())[1].size())
+print(list(model.parameters())[2].size())
+print(list(model.parameters())[3].size())
+print(list(model.parameters())[4].size())
+print(list(model.parameters())[5].size())
+
+#Nummber of steps to unroll
+seq_dim = 28
+
+iter = 0
+for epoch in range(num_epochs):
+    for i, (images, labels) in enumerate(train_loader):
+        images = variable(images.view(-1, seq_dim, input_dim))
+        labels = variable(labels)
+        optimizer.zero_grad()
+        outputs = model(images)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+
+        iter += 1
+
+        if iter % 500 == 0:
+            correct = 0
+            total = 0
+
+            for images, labels in test_loader:
+                images = variable(images.view(-1, seq_dim, input_dim))
+                outputs = model(images)
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct+= (predicted == labels).sum()
+
+            accuracy = 100*correct/total
+            
+            print("Iteration: {}. loss: {}. accuracy: {} ".format(iter, loss.data, accuracy))
